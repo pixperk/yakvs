@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-type store struct {
+// Store provides a persistent key-value store with expiration
+type Store struct {
 	mu   sync.RWMutex
 	data map[string]Value
 	log  *os.File
@@ -19,14 +20,14 @@ type Value struct {
 	ExpiresAt time.Time
 }
 
-func NewStore(logFilePath string) (*store, error) {
+func NewStore(logFilePath string) (*Store, error) {
 
 	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &store{
+	s := &Store{
 		data: make(map[string]Value),
 		log:  logFile,
 	}
@@ -46,7 +47,7 @@ func NewValue(data string, expiresAfter time.Duration) Value {
 	return val
 }
 
-func (s *store) Set(key string, value Value) {
+func (s *Store) Set(key string, value Value) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -59,7 +60,7 @@ func (s *store) Set(key string, value Value) {
 	s.data[key] = value
 }
 
-func (s *store) Get(key string) (Value, bool) {
+func (s *Store) Get(key string) (Value, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -70,7 +71,7 @@ func (s *store) Get(key string) (Value, bool) {
 	return val, ok
 }
 
-func (s *store) Delete(key string) {
+func (s *Store) Delete(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -84,7 +85,7 @@ func (s *store) Delete(key string) {
 
 // ReplayLogs rebuilds the store's in-memory data by replaying all operations from the log file.
 // This should only be called during initialization, before any concurrent access to the store.
-func (s *store) ReplayLogs() {
+func (s *Store) ReplayLogs() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.log.Seek(0, 0)
@@ -133,7 +134,7 @@ func (s *store) ReplayLogs() {
 	}
 }
 
-func (s *store) TTL(key string) (time.Duration, bool) {
+func (s *Store) TTL(key string) (time.Duration, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -146,7 +147,7 @@ func (s *store) TTL(key string) (time.Duration, bool) {
 	return ttl, true
 }
 
-func (s *store) BackgroundCleaner() {
+func (s *Store) BackgroundCleaner() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -164,7 +165,7 @@ func (s *store) BackgroundCleaner() {
 	}
 }
 
-func (s *store) StartBackgroundCleaner() {
+func (s *Store) StartBackgroundCleaner() {
 	go func() {
 		for {
 			time.Sleep(10 * time.Second)
