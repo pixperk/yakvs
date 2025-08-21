@@ -173,3 +173,23 @@ func (s *Store) StartBackgroundCleaner() {
 		}
 	}()
 }
+
+// Range iterates over all key-value pairs in the store, calling fn for each
+func (s *Store) Range(fn func(key string, value Value) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for k, v := range s.data {
+		if !fn(k, v) {
+			break
+		}
+	}
+}
+
+// Clear removes all key-value pairs from the store
+func (s *Store) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.data = make(map[string]Value)
+}

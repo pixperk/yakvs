@@ -17,6 +17,7 @@ func printUsage() {
 	fmt.Println("  get <key>                       - Get a value")
 	fmt.Println("  delete <key>                    - Delete a value")
 	fmt.Println("  ttl <key>                       - Get the TTL for a key")
+	fmt.Println("  status                          - Get the Raft cluster status")
 	fmt.Println("  help                            - Show this help message")
 	fmt.Println("  exit                            - Exit the client")
 }
@@ -24,7 +25,7 @@ func printUsage() {
 func printWelcome(serverAddr string) {
 	fmt.Println("┌───────────────────────────────────────────────────┐")
 	fmt.Println("│                     Y A K V S                     │")
-	fmt.Println("│         Yet Another Key-Value Store               │")
+	fmt.Println("│         Yet Another Key-Value Store (Raft)        │")
 	fmt.Println("├───────────────────────────────────────────────────┤")
 	fmt.Printf("│ Connected to: %-35s │\n", serverAddr)
 	fmt.Println("│                                                   │")
@@ -34,19 +35,26 @@ func printWelcome(serverAddr string) {
 }
 
 func main() {
-
 	serverAddr := flag.String("server", "localhost:8080", "server address")
 	interactive := flag.Bool("interactive", true, "run in interactive mode")
+	command := flag.String("command", "", "command to run in non-interactive mode")
 	flag.Parse()
 
-	c, err := client.NewClient(*serverAddr)
+	c, err := client.NewRaftClient(*serverAddr)
 	if err != nil {
 		fmt.Printf("Error connecting to server: %v\n", err)
 		os.Exit(1)
 	}
 	defer c.Close()
 
-	args := flag.Args()
+	// If command is specified, use that instead of flag.Args()
+	var args []string
+	if *command != "" {
+		args = parseInput(*command)
+		*interactive = false
+	} else {
+		args = flag.Args()
+	}
 
 	// Check if there are command-line arguments for non-interactive mode
 	if len(args) > 0 && !*interactive {
@@ -59,7 +67,7 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
-		fmt.Print("\n\033[1;36myakvs>\033[0m ")
+		fmt.Print("\n\033[1;36myakvs-raft>\033[0m ")
 		if !scanner.Scan() {
 			break
 		}
@@ -122,7 +130,7 @@ func parseInput(input string) []string {
 	return args
 }
 
-func processCommand(c *client.Client, args []string) {
+func processCommand(c *client.RaftClient, args []string) {
 	if len(args) == 0 {
 		return
 	}
@@ -195,6 +203,14 @@ func processCommand(c *client.Client, args []string) {
 			return
 		}
 		fmt.Printf("TTL for key '%s': %v\n", key, ttl)
+
+	case "status":
+		status, err := c.Status()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+		fmt.Printf("Cluster status: %s\n", status)
 
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
